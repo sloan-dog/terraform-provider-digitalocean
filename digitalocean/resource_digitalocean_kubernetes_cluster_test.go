@@ -27,7 +27,7 @@ func TestAccDigitalOceanKubernetesCluster_Basic(t *testing.T) {
 					testAccCheckDigitalOceanKubernetesClusterExists("digitalocean_kubernetes_cluster.foobar", &k8s),
 					resource.TestCheckResourceAttr("digitalocean_kubernetes_cluster.foobar", "name", rName),
 					resource.TestCheckResourceAttr("digitalocean_kubernetes_cluster.foobar", "region", "lon1"),
-					resource.TestCheckResourceAttr("digitalocean_kubernetes_cluster.foobar", "version", "1.15.3-do.1"),
+					resource.TestCheckResourceAttr("digitalocean_kubernetes_cluster.foobar", "version", "1.15.3-do.2"),
 					resource.TestCheckResourceAttrSet("digitalocean_kubernetes_cluster.foobar", "ipv4_address"),
 					resource.TestCheckResourceAttrSet("digitalocean_kubernetes_cluster.foobar", "cluster_subnet"),
 					resource.TestCheckResourceAttrSet("digitalocean_kubernetes_cluster.foobar", "service_subnet"),
@@ -178,12 +178,37 @@ func TestAccDigitalOceanKubernetesCluster_KubernetesProviderInteroperability(t *
 	})
 }
 
+// Creates a node pool without terraform tracking tag
+func testAccDigitalOceanKubernetesConfigNonDefaultNodePool(clusterResourceName string, nodePoolResourceName string) string {
+	return fmt.Sprintf(`
+resource "digitalocean_kubernetes_cluster" "foobar" {
+	name    = "%s"
+	region  = "lon1"
+	version = "1.15.3-do.2"
+	tags    = ["foo","bar"]
+
+	node_pool {
+		node_count = 0
+	}
+}
+
+resource "digitalocean_kubernetes_node_pool" "bar" {
+	cluster_id = "${digitalocean_kubernetes_cluster.foobar.id}"
+
+	name = "%s"
+	size = "s-1vcpu-2gb"
+	node_count = 1
+	tags = ["foo"]
+}
+`, clusterResourceName, nodePoolResourceName)
+}
+
 func testAccDigitalOceanKubernetesConfigBasic(rName string) string {
 	return fmt.Sprintf(`
 resource "digitalocean_kubernetes_cluster" "foobar" {
 	name    = "%s"
 	region  = "lon1"
-	version = "1.15.3-do.1"
+	version = "1.15.3-do.2"
 	tags    = ["foo","bar", "one"]
 
 	node_pool {
@@ -201,7 +226,7 @@ func testAccDigitalOceanKubernetesConfigBasic2(rName string) string {
 resource "digitalocean_kubernetes_cluster" "foobar" {
 	name    = "%s"
 	region  = "lon1"
-	version = "1.15.3-do.1"
+	version = "1.15.3-do.2"
 	tags    = ["foo","bar"]
 
 	node_pool {
@@ -219,7 +244,7 @@ func testAccDigitalOceanKubernetesConfigBasic3(rName string) string {
 resource "digitalocean_kubernetes_cluster" "foobar" {
 	name    = "%s"
 	region  = "lon1"
-	version = "1.15.3-do.1"
+	version = "1.15.3-do.2"
 	tags    = ["foo","bar"]
 
 	node_pool {
@@ -237,7 +262,7 @@ func testAccDigitalOceanKubernetesConfigBasic4(rName string) string {
 resource "digitalocean_kubernetes_cluster" "foobar" {
 	name    = "%s"
 	region  = "lon1"
-	version = "1.15.3-do.1"
+	version = "1.15.3-do.2"
 	tags    = ["one","two"]
 
 	node_pool {
@@ -255,7 +280,7 @@ func testAccDigitalOceanKubernetesConfig_KubernetesProviderInteroperability(rNam
 resource "digitalocean_kubernetes_cluster" "foobar" {
 	name    = "%s"
 	region  = "lon1"
-	version = "1.15.3-do.1"
+	version = "1.15.3-do.2"
 
 	node_pool {
 	  name = "default"

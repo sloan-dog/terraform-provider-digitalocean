@@ -15,10 +15,13 @@ import (
 
 func resourceDigitalOceanKubernetesCluster() *schema.Resource {
 	return &schema.Resource{
-		Create:        resourceDigitalOceanKubernetesClusterCreate,
-		Read:          resourceDigitalOceanKubernetesClusterRead,
-		Update:        resourceDigitalOceanKubernetesClusterUpdate,
-		Delete:        resourceDigitalOceanKubernetesClusterDelete,
+		Create: resourceDigitalOceanKubernetesClusterCreate,
+		Read:   resourceDigitalOceanKubernetesClusterRead,
+		Update: resourceDigitalOceanKubernetesClusterUpdate,
+		Delete: resourceDigitalOceanKubernetesClusterDelete,
+		Importer: &schema.ResourceImporter{
+			State: resourceDigitalOceanKubernetesClusterImport,
+		},
 		SchemaVersion: 1,
 
 		Schema: map[string]*schema.Schema{
@@ -204,7 +207,7 @@ func digitaloceanKubernetesClusterRead(client *godo.Client, cluster *godo.Kubern
 	d.Set("updated_at", cluster.UpdatedAt.UTC().String())
 
 	// find the default node pool from all the pools in the cluster
-	// the default node pool has a custom tag k8s:default-node-pool
+	// the default node pool has a custom tag terraform:default-node-pool
 	for _, p := range cluster.NodePools {
 		for _, t := range p.Tags {
 			if t == digitaloceanKubernetesDefaultNodePoolTag {
@@ -282,6 +285,55 @@ func resourceDigitalOceanKubernetesClusterDelete(d *schema.ResourceData, meta in
 
 	d.SetId("")
 
+	return nil
+}
+
+func resourceDigitalOceanKubernetesClusterImport(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+	client := meta.(*CombinedConfig).godoClient()
+
+	cluster, resp, err := client.Kubernetes.Get(context.Background(), d.Id())
+	if err != nil {
+		if resp != nil && resp.StatusCode == 404 {
+			d.SetId("")
+			return nil, nil
+		}
+
+		return nil, fmt.Errorf("Error retrieving Kubernetes cluster: %s", err)
+	}
+	err = setDefaultNodePoolTagIfNoneDefault(cluster)
+	if err != nil {
+		return nil, fmt.Errorf("could not tag default pool: %v", err)
+	}
+	err = digitaloceanKubernetesClusterRead(client, cluster, d)
+	if err != nil {
+		return nil, fmt.Errorf("could not read cluster: %v", err)
+	}
+	result := make([]*schema.ResourceData, 1)
+	result[0] = d
+	return result, nil
+
+}
+
+func setDefaultNodePoolTagIfNoneDefault(c *godo.KubernetesCluster) error {
+	if len(c.NodePools) < 1 {
+		return nil
+	}
+	anyPoolsTaggedWithDefault := false
+	for _, p := range c.NodePools {
+		for _, t := range p.Tags {
+			if t == digitaloceanKubernetesDefaultNodePoolTag {
+				anyPoolsTaggedWithDefault = true
+				break
+			}
+		}
+		if anyPoolsTaggedWithDefault {
+			break
+		}
+	}
+	// set default tag on first pool for later read
+	if !anyPoolsTaggedWithDefault {
+		c.NodePools[0].Tags = append(c.NodePools[0].Tags, digitaloceanKubernetesDefaultNodePoolTag)
+	}
 	return nil
 }
 
